@@ -14,13 +14,13 @@ Live-Tracker für Arda Saatçis 600km-Lauf. Single-Page-HTML mit Live-Viewer-Zah
 npx serve -p 3000
 ```
 
-Dann `http://localhost:3000/Arda/Arda 600km Live Tracker.html` aufrufen.
+Dann `http://localhost:3000` aufrufen.
 
 `file://` geht **nicht** — Twitch-Embed braucht einen Hostname und der referrer-restricted YouTube-Key blockt sonst.
 
 ## Struktur
 
-- `Arda/Arda 600km Live Tracker.html` — Frontend
+- `index.html` — Frontend
 - `supabase/migrations/` — DB-Schema
 - `supabase/functions/poll-viewers/` — Cron, fragt Twitch + YouTube ab
 - `supabase/functions/submit-watchparty/` — Public Submit-Endpoint
