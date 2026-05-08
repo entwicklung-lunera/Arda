@@ -662,8 +662,36 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.46.1';
 
   // ---------- Live state ----------
   let total = 0;
-  let peak = 0;
+  let peak = 0;            // wird initial aus event_stats geladen
   const totalHistory = []; // {t, v}
+
+  // Initial-Peak aus DB laden + Realtime-Subscription
+  async function loadPeak(){
+    const { data, error } = await supa
+      .from('event_stats')
+      .select('value_int')
+      .eq('key', 'main_total_peak')
+      .maybeSingle();
+    if (error){ console.warn('[peak] load failed', error); return; }
+    const v = Number(data?.value_int ?? 0);
+    if (v > peak){
+      peak = v;
+      $('#peak-val').textContent = fmtDe(peak);
+    }
+  }
+  loadPeak();
+  supa.channel('event-stats-public')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'event_stats' }, (payload) => {
+      const row = payload.new;
+      if (row && row.key === 'main_total_peak'){
+        const v = Number(row.value_int ?? 0);
+        if (v > peak){
+          peak = v;
+          $('#peak-val').textContent = fmtDe(peak);
+        }
+      }
+    })
+    .subscribe();
   let twViewers = 0;
   let ytViewers = 0;
   let twOnline = false;
