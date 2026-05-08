@@ -443,54 +443,6 @@
   footer.foot a{transition:color 120ms}
   footer.foot a:hover{color:var(--bone)}
 
-  /* ============ DEMO PANEL ============ */
-  .demo{
-    position:fixed;bottom:14px;right:14px;z-index:60;
-    background:var(--night-2);border:1px solid var(--hairline);
-    padding:11px 13px 12px;
-    font-family:var(--mono);font-size:10px;letter-spacing:.14em;
-    color:var(--dust);
-    display:flex;flex-direction:column;gap:7px;
-    min-width:200px;max-width:240px;
-    box-shadow:0 4px 24px rgba(0,0,0,.4);
-  }
-  .demo__title{
-    text-transform:uppercase;color:var(--embers);
-    display:flex;justify-content:space-between;align-items:center;
-    margin-bottom:3px;font-weight:500;
-  }
-  .demo__title button{
-    background:transparent;border:none;color:var(--dust);
-    font:inherit;font-size:14px;cursor:pointer;padding:0 0 0 8px;line-height:1;
-  }
-  .demo__title button:hover{color:var(--bone)}
-  .demo__body{display:flex;flex-direction:column;gap:7px}
-  .demo label{
-    display:flex;align-items:center;gap:9px;cursor:pointer;
-    text-transform:uppercase;color:var(--bone);user-select:none;
-  }
-  .demo input[type="checkbox"]{
-    appearance:none;-webkit-appearance:none;
-    width:14px;height:14px;
-    background:var(--night);border:1px solid var(--hairline);
-    cursor:pointer;position:relative;flex-shrink:0;
-  }
-  .demo input[type="checkbox"]:checked{
-    background:var(--embers);border-color:var(--embers);
-  }
-  .demo input[type="checkbox"]:checked::after{
-    content:"";position:absolute;left:3px;top:0px;
-    width:5px;height:9px;
-    border:solid var(--night);border-width:0 1.5px 1.5px 0;
-    transform:rotate(45deg);
-  }
-  .demo.collapsed .demo__body{display:none}
-  .demo.collapsed{min-width:0;padding:9px 12px}
-  .demo.collapsed .demo__title{margin-bottom:0}
-
-  @media (max-width:540px){
-    .demo{right:10px;bottom:10px;left:auto;min-width:0;max-width:calc(100vw - 20px)}
-  }
 </style>
 </head>
 <body>
@@ -610,19 +562,9 @@
   </footer>
 </main>
 
-<aside class="demo" id="demo" aria-label="Demo-States">
-  <div class="demo__title">
-    <span>Demo · States</span>
-    <button id="demo-toggle" aria-label="ein-/ausklappen">−</button>
-  </div>
-  <div class="demo__body">
-    <label><input type="checkbox" id="t-stale"> <span>Counter stale</span></label>
-    <label><input type="checkbox" id="t-paused"> <span>Stream-Pause</span></label>
-    <label><input type="checkbox" id="t-wp-offline"> <span>Watchparty offline</span></label>
-  </div>
-</aside>
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.46.1';
 
-<script>
 (() => {
   // ---------- Helpers ----------
   const $ = (sel, ctx=document) => ctx.querySelector(sel);
@@ -705,7 +647,14 @@
     // Pollintervall für Live-Zahlen (ms). Twitch via decapi.me ist tolerant,
     // YouTube API hat 10k Units/Tag — bei 15s Intervall ~5760 Aufrufe/Tag.
     pollMs: 15000,
+    // Supabase — Watchparties + Submit
+    supabaseUrl: 'https://rnxzmwlddwmdpotvfnvw.supabase.co',
+    supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJueHptd2xkZHdtZHBvdHZmbnZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNTAyMDQsImV4cCI6MjA5MzgyNjIwNH0.8Q-MwPHzxN2Xh4fgNlc8BlzE1I0Xmgx3e21OBkXkmbE',
   };
+
+  const supa = createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey, {
+    auth: { persistSession: false },
+  });
 
   // ---------- Live state ----------
   let total = 0;
@@ -789,6 +738,18 @@
     return watchparties.filter(w => !w.offline).reduce((s,w) => s + w.viewers, 0);
   }
 
+  function recomputeTotal(){
+    total = (twOnline ? twViewers : 0) + (ytOnline ? ytViewers : 0) + watchpartySum();
+    if (total > peak){ peak = total; $('#peak-val').textContent = fmtDe(peak); }
+    setCounter(total);
+    tickSpark(total);
+    totalHistory.push({t: Date.now(), v: total});
+    while (totalHistory.length && Date.now() - totalHistory[0].t > 65000) totalHistory.shift();
+    const sixtyAgo = totalHistory.find(e => Date.now() - e.t >= 60000) || totalHistory[0];
+    const d60 = total - sixtyAgo.v;
+    $('#delta-val').textContent = sign(d60);
+  }
+
   async function pollLive(){
     const [twN, ytN] = await Promise.all([fetchTwitchViewers(), fetchYoutubeViewers()]);
     if (twN != null) twViewers = twN;
@@ -802,23 +763,41 @@
     $('#tw-viewers').textContent = twOnline ? fmtDe(twViewers) : '—';
     $('#yt-viewers').textContent = ytOnline ? fmtDe(ytViewers) : '—';
 
-    // Total = Live-Sum aller Streams + Watchparties
-    // Total = nur echte Stream-Zahlen. Watchparty-Tabelle ist UI-Mock und zählt nicht mit.
-    total = (twOnline ? twViewers : 0) + (ytOnline ? ytViewers : 0);
-    if (total > peak){ peak = total; $('#peak-val').textContent = fmtDe(peak); }
-    setCounter(total);
-    tickSpark(total);
-    totalHistory.push({t: Date.now(), v: total});
-    while (totalHistory.length && Date.now() - totalHistory[0].t > 65000) totalHistory.shift();
-    const sixtyAgo = totalHistory.find(e => Date.now() - e.t >= 60000) || totalHistory[0];
-    const d60 = total - sixtyAgo.v;
-    $('#delta-val').textContent = sign(d60);
+    recomputeTotal();
   }
 
-  // ---------- Watchparties ----------
-  // Echte Watchparties — Liste aktuell leer.
-  // Format: {platform:'tw'|'yt', name:'channelname', viewers:0, offline:false}
-  const watchparties = [];
+  // ---------- Watchparties (aus Supabase) ----------
+  // Wird per loadWatchparties() befüllt und per Realtime-Subscription aktuell gehalten.
+  // Format intern: {platform:'tw'|'yt', name, viewers, offline}
+  let watchparties = [];
+
+  function rowToWp(row){
+    return {
+      platform: row.platform === 'twitch' ? 'tw' : 'yt',
+      name: row.display_name || row.channel,
+      viewers: row.status === 'live' ? (row.last_viewers ?? 0) : 0,
+      offline: row.status !== 'live',
+    };
+  }
+
+  async function loadWatchparties(){
+    const { data, error } = await supa
+      .from('watchparties')
+      .select('platform, channel, display_name, status, last_viewers')
+      .eq('approved', true)
+      .order('last_viewers', { ascending: false, nullsFirst: false });
+    if (error){ console.warn('[wp] load failed', error); return; }
+    watchparties = (data ?? []).map(rowToWp);
+    renderWP();
+    recomputeTotal();
+  }
+
+  // Realtime-Subscription: bei jedem Update an watchparties → reload
+  supa.channel('watchparties-public')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'watchparties' }, () => {
+      loadWatchparties();
+    })
+    .subscribe();
 
   function renderWP(){
     const tbody = $('#wp-body');
@@ -851,17 +830,7 @@
     if (showAll) showAll.hidden = watchparties.length <= 10;
   }
   renderWP();
-
-  function tickWP(){
-    for (const wp of watchparties){
-      if (wp.offline) continue;
-      // gentle wobble; bigger for bigger streams
-      const scale = Math.max(20, wp.viewers * 0.012);
-      const change = Math.round((Math.random() - .48) * scale * 2);
-      wp.viewers = Math.max(50, wp.viewers + change);
-    }
-    renderWP();
-  }
+  loadWatchparties();
 
   // ---------- Clock ----------
   const eventEnd = Date.now() + (38*3600 + 42*60 + 11) * 1000;
@@ -874,21 +843,9 @@
   }
 
   // ---------- Master tick ----------
-  let staleSince = null;
-
-  // Sekündlich nur Clock; Live-Viewer kommen aus pollLive(); Watchparties wobbeln alle 4s.
-  let wpTickN = 0;
-  setInterval(() => {
-    tickClock();
-    if (++wpTickN % 4 === 0){
-      tickWP();
-      // Total nach WP-Wobble nachziehen, ohne neuen API-Call
-      // Total = nur echte Stream-Zahlen. Watchparty-Tabelle ist UI-Mock und zählt nicht mit.
-    total = (twOnline ? twViewers : 0) + (ytOnline ? ytViewers : 0);
-      if (total > peak){ peak = total; $('#peak-val').textContent = fmtDe(peak); }
-      setCounter(total);
-    }
-  }, 1000);
+  // Sekündlich nur Clock. Hauptstream-Viewer kommen aus pollLive(),
+  // Watchparties werden serverseitig (Cron) aktualisiert und per Realtime gepusht.
+  setInterval(tickClock, 1000);
 
   // initial paint + Live-Polling starten
   setCounter(0);
@@ -896,49 +853,59 @@
   pollLive();
   setInterval(pollLive, CONFIG.pollMs);
 
-  // ---------- Demo toggles ----------
-  $('#t-stale').addEventListener('change', e => {
-    document.body.classList.toggle('stale', e.target.checked);
-    if (e.target.checked){
-      staleSince = $('#update-clock').textContent;
-      $('#stale-since').textContent = staleSince;
-    }
-  });
-
-  $('#t-paused').addEventListener('change', e => {
-    const state = e.target.checked ? 'paused' : '';
-    $('#stream-tw').dataset.state = state;
-    $('#stream-yt').dataset.state = state;
-    if (e.target.checked){
-      $('#tw-viewers').textContent = '—';
-      $('#yt-viewers').textContent = '—';
-    } else {
-      $('#tw-viewers').textContent = fmtDe(twViewers);
-      $('#yt-viewers').textContent = fmtDe(ytViewers);
-    }
-  });
-
-  $('#t-wp-offline').addEventListener('change', e => {
-    // mark a mid-rank watchparty offline so it visibly demotes
-    const target = watchparties.find(w => w.name === 'coffeehouse');
-    if (target) target.offline = e.target.checked;
-    renderWP();
-  });
-
-  // demo collapse
-  $('#demo-toggle').addEventListener('click', () => {
-    const demo = $('#demo');
-    const collapsed = demo.classList.toggle('collapsed');
-    $('#demo-toggle').textContent = collapsed ? '+' : '−';
-  });
-
   // submit form
-  $('#submit-form').addEventListener('submit', e => {
+  $('#submit-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = e.target.querySelector('button');
+    const form = e.target;
+    const btn = form.querySelector('button');
+    const input = form.querySelector('input');
+    const note = $('.submit-note');
+    const url = input.value.trim();
+    if (!url) return;
+
     const old = btn.textContent;
-    btn.textContent = '✓';
-    setTimeout(() => { btn.textContent = old; e.target.reset(); }, 1400);
+    const oldNote = note ? note.textContent : '';
+    btn.disabled = true;
+    btn.textContent = '…';
+
+    try {
+      const res = await fetch(`${CONFIG.supabaseUrl}/functions/v1/submit-watchparty`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': CONFIG.supabaseAnonKey,
+        },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.ok){
+        btn.textContent = '✓';
+        if (note) note.textContent = data.duplicate
+          ? 'Schon eingereicht · wir prüfen'
+          : 'Eingereicht · manuelle Prüfung läuft';
+        form.reset();
+      } else if (res.status === 429){
+        btn.textContent = '!';
+        if (note) note.textContent = 'Zu viele Submits · gleich nochmal';
+      } else if (res.status === 400){
+        btn.textContent = '!';
+        if (note) note.textContent = 'URL nicht erkannt · Twitch oder YouTube?';
+      } else {
+        btn.textContent = '!';
+        if (note) note.textContent = 'Fehler · später nochmal';
+      }
+    } catch (err){
+      console.warn('[submit] failed', err);
+      btn.textContent = '!';
+      if (note) note.textContent = 'Netzwerkfehler';
+    }
+
+    setTimeout(() => {
+      btn.textContent = old;
+      btn.disabled = false;
+      if (note) note.textContent = oldNote;
+    }, 3500);
   });
 
   // wp show all (just toggles label, no actual data fetch in mockup)
