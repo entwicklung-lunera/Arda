@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ARDA · 600KM · LIVE TRACKER</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --night:#0B1018;
+    --night-2:#141B26;
+    --night-3:#182231;
+    --hairline:#1F2A38;
+    --bone:#F4EFE6;
+    --dust:#7A8494;
+    --embers:#FF5A1F;
+    --embers-dim:#8E2E0F;
+    --sans:'Inter',system-ui,-apple-system,sans-serif;
+    --display:'Big Shoulders Display','Inter',sans-serif;
+    --mono:'JetBrains Mono','Menlo',monospace;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-padding-top:64px;-webkit-text-size-adjust:100%}
+  body{
+    background:var(--night);color:var(--bone);
+    font:16px/1.5 var(--sans);
+    font-feature-settings:"cv11","ss01";
+    font-variant-numeric:tabular-nums;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    -webkit-tap-highlight-color:transparent;
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+  button,input{font:inherit;color:inherit}
+  ::selection{background:var(--embers);color:var(--night)}
+
+  .container{max-width:1100px;margin:0 auto;padding:0 20px}
+  @media (min-width:720px){.container{padding:0 32px}}
+
+  /* ============ TOPBAR ============ */
+  .topbar{
+    position:sticky;top:0;z-index:50;
+    background:rgba(11,16,24,.86);
+    backdrop-filter:saturate(140%) blur(10px);
+    -webkit-backdrop-filter:saturate(140%) blur(10px);
+    border-bottom:1px solid var(--hairline);
+  }
+  .topbar__inner{
+    max-width:1100px;margin:0 auto;
+    padding:13px 20px;
+    display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;
+  }
+  @media (min-width:720px){.topbar__inner{padding:14px 32px}}
+
+  .live-badge{display:inline-flex;align-items:center;gap:8px}
+  .live-dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--embers);
+    box-shadow:0 0 0 0 rgba(255,90,31,.55);
+    animation:pulse60 1s infinite cubic-bezier(.4,0,.6,1);
+  }
+  @keyframes pulse60{
+    0%{box-shadow:0 0 0 0 rgba(255,90,31,.55);transform:scale(1)}
+    70%{box-shadow:0 0 0 9px rgba(255,90,31,0);transform:scale(1)}
+    100%{box-shadow:0 0 0 0 rgba(255,90,31,0);transform:scale(1)}
+  }
+  .live-label{
+    font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+    color:var(--embers);text-transform:uppercase;font-weight:500;
+  }
+
+  .topbar__title{
+    font-family:var(--display);font-weight:700;
+    text-transform:uppercase;letter-spacing:.1em;
+    font-size:14px;color:var(--bone);
+    text-align:center;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .topbar__title em{color:var(--dust);font-style:normal;margin:0 8px;font-weight:500}
+
+  .topbar__clock{
+    font-family:var(--mono);font-size:11px;color:var(--dust);
+    letter-spacing:.06em;text-transform:uppercase;
+  }
+  .topbar__clock strong{color:var(--bone);font-weight:500}
+
+  body.stale .live-dot{animation-play-state:paused;opacity:.32;box-shadow:none}
+  body.stale .live-label{color:var(--dust)}
+
+  @media (max-width:540px){
+    .topbar__title .hide-sm{display:none}
+    .topbar__clock .hide-sm{display:none}
+  }
+
+  /* ============ HERO ============ */
+  .hero{
+    padding:clamp(48px,9vw,108px) 0 clamp(36px,5vw,64px);
+    position:relative;
+  }
+  .hero__label{
+    font-family:var(--mono);font-size:11px;letter-spacing:.2em;
+    color:var(--dust);text-transform:uppercase;
+    margin-bottom:clamp(20px,4vw,36px);
+    display:flex;align-items:center;gap:14px;
+  }
+  .hero__label::before{
+    content:"";display:inline-block;width:18px;height:1px;background:var(--dust);
+  }
+
+  .counter{
+    display:flex;align-items:flex-end;flex-wrap:nowrap;
+    font-family:var(--display);font-weight:900;
+    font-size:clamp(110px,22vw,220px);
+    line-height:1;letter-spacing:-.04em;
+    color:var(--bone);
+    margin-bottom:clamp(22px,3vw,32px);
+    user-select:none;
+  }
+  .digit{
+    position:relative;
+    display:inline-block;
+    height:1em;
+    width:.62em;
+    overflow:hidden;
+    text-align:center;
+    border-bottom:1px solid rgba(255,90,31,.18);
+  }
+  .digit__strip{
+    display:block;
+    transition:transform 240ms cubic-bezier(.22,.85,.28,1);
+    will-change:transform;
+  }
+  .digit__cell{display:block;height:1em;line-height:1}
+  .digit::after{
+    content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
+    background:var(--embers);opacity:0;
+    transition:opacity 240ms ease-out;
+  }
+  .digit.flash::after{opacity:1;transition:opacity 60ms ease-out}
+
+  .sep{
+    display:inline-flex;align-items:flex-end;justify-content:center;
+    width:.28em;color:var(--dust);
+    border-bottom:1px solid rgba(255,90,31,.18);
+    height:1em;line-height:1;
+    padding-bottom:.05em;
+  }
+
+  body.stale .digit{opacity:.5}
+  body.stale .digit::after,body.stale .sep{border-bottom-color:var(--hairline)}
+
+  .hero__meta{
+    display:flex;align-items:center;justify-content:space-between;gap:24px;
+    flex-wrap:wrap;
+  }
+  .hero__delta{
+    font-family:var(--mono);font-size:12px;color:var(--bone);
+    letter-spacing:.04em;line-height:1;
+    display:inline-flex;align-items:center;gap:14px;flex-wrap:wrap;
+  }
+  .hero__delta .arrow{color:var(--embers)}
+  .hero__delta .muted{color:var(--dust)}
+  .hero__delta .pip{color:var(--hairline);user-select:none}
+
+  .stale-banner{
+    display:none;
+    font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    color:var(--dust);text-transform:uppercase;
+    align-items:center;gap:10px;
+  }
+  .stale-banner::before{
+    content:"";display:inline-block;width:8px;height:8px;
+    background:var(--dust);border-radius:50%;opacity:.5;
+  }
+  body.stale .hero__delta{display:none}
+  body.stale .stale-banner{display:inline-flex}
+
+  .sparkline{
+    width:160px;max-width:36vw;height:32px;display:block;flex-shrink:0;
+  }
+  .sparkline path{fill:none;stroke-width:1.25;vector-effect:non-scaling-stroke}
+  .spark-tail{stroke:var(--embers-dim);opacity:.85}
+  .spark-head{fill:var(--embers)}
+  body.stale .spark-tail{stroke:var(--dust);opacity:.35}
+  body.stale .spark-head{fill:var(--dust);opacity:.4}
+
+  /* ============ SECTIONS ============ */
+  section.block{
+    padding:clamp(36px,6vw,64px) 0;
+    border-top:1px solid var(--hairline);
+  }
+  .section-head{
+    display:flex;align-items:baseline;justify-content:space-between;gap:14px;
+    margin-bottom:clamp(22px,3vw,30px);
+    flex-wrap:wrap;
+  }
+  .section-head h2{
+    font-family:var(--display);font-weight:700;
+    text-transform:uppercase;letter-spacing:.1em;
+    font-size:clamp(20px,2.4vw,24px);
+    color:var(--bone);
+  }
+  .section-head .meta{
+    font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+    color:var(--dust);text-transform:uppercase;
+    display:inline-flex;align-items:center;gap:8px;
+  }
+  .meta-tick{
+    display:inline-block;width:6px;height:6px;border-radius:50%;
+    background:var(--embers);
+    animation:pulse60 1s infinite cubic-bezier(.4,0,.6,1);
+  }
+
+  /* ============ MAIN STREAMS ============ */
+  .streams{display:grid;grid-template-columns:1fr;gap:18px}
+  @media (min-width:720px){.streams{grid-template-columns:1fr 1fr;gap:24px}}
+
+  .stream{
+    background:var(--night-2);
+    border:1px solid var(--hairline);
+    display:flex;flex-direction:column;
+    transition:border-color 160ms ease;
+  }
+  .stream:hover{border-color:#2a3848}
+
+  .stream__thumb{
+    position:relative;aspect-ratio:16/9;
+    background:#0F1620;
+    background-image:
+      repeating-linear-gradient(135deg,rgba(244,239,230,.022) 0 1px,transparent 1px 9px);
+    border-bottom:1px solid var(--hairline);
+    overflow:hidden;
+  }
+  .stream__thumb::before{
+    content:"STREAM PREVIEW";
+    position:absolute;inset:0;display:grid;place-items:center;
+    font-family:var(--mono);font-size:10px;color:var(--dust);
+    letter-spacing:.22em;
+  }
+  .stream__thumb iframe{
+    position:absolute;inset:0;width:100%;height:100%;border:0;display:block;z-index:1;
+  }
+  .stream__thumb.has-embed::before{display:none}
+  .stream__thumb.has-embed .stream__platform,
+  .stream__thumb.has-embed .stream__live-bug{z-index:2}
+  .stream__platform{
+    position:absolute;top:12px;left:12px;
+    font-family:var(--mono);font-size:10px;letter-spacing:.16em;
+    color:var(--bone);
+    background:rgba(11,16,24,.72);border:1px solid var(--hairline);
+    padding:4px 9px;text-transform:uppercase;font-weight:500;
+  }
+  .stream__live-bug{
+    position:absolute;top:12px;right:12px;
+    font-family:var(--mono);font-size:10px;letter-spacing:.18em;
+    color:var(--embers);text-transform:uppercase;
+    display:inline-flex;align-items:center;gap:6px;
+    background:rgba(11,16,24,.72);border:1px solid var(--hairline);
+    padding:4px 9px;
+  }
+  .stream__live-bug::before{
+    content:"";width:6px;height:6px;border-radius:50%;background:var(--embers);
+    animation:pulse60 1s infinite cubic-bezier(.4,0,.6,1);
+  }
+
+  .stream__info{
+    padding:18px 20px 20px;
+    display:grid;grid-template-columns:1fr auto;gap:18px;align-items:end;
+  }
+  .stream__viewers{
+    display:flex;flex-direction:column;
+  }
+  .stream__viewers small{
+    font-family:var(--mono);font-size:10px;letter-spacing:.2em;
+    color:var(--dust);margin-bottom:6px;text-transform:uppercase;font-weight:500;
+  }
+  .stream__viewers .num-row{
+    display:inline-flex;align-items:baseline;gap:10px;
+    font-family:var(--display);font-weight:900;
+    font-size:clamp(36px,5.2vw,52px);line-height:.95;letter-spacing:-.02em;
+  }
+  .stream__viewers .live-tick{
+    display:inline-block;width:8px;height:8px;border-radius:50%;
+    background:var(--embers);
+    animation:pulse60 1s infinite cubic-bezier(.4,0,.6,1);
+    transform:translateY(-4px);
+  }
+  .stream__cta{
+    font-family:var(--display);font-weight:700;
+    text-transform:uppercase;letter-spacing:.1em;
+    font-size:13px;
+    border:1px solid var(--bone);color:var(--bone);
+    padding:10px 14px;background:transparent;cursor:pointer;
+    transition:background 120ms,color 120ms;white-space:nowrap;
+    display:inline-flex;align-items:center;gap:10px;
+  }
+  .stream__cta:hover{background:var(--bone);color:var(--night)}
+  .stream__cta .arr{transition:transform 160ms}
+  .stream__cta:hover .arr{transform:translateX(3px)}
+
+  .stream[data-state="paused"] .stream__thumb{background-image:none;background:var(--night-2)}
+  .stream[data-state="paused"] .stream__thumb::before{content:"STREAM PAUSE";color:var(--dust)}
+  .stream[data-state="paused"] .stream__live-bug{display:none}
+  .stream[data-state="paused"] .stream__viewers .num-row{color:var(--dust)}
+  .stream[data-state="paused"] .stream__viewers .live-tick{display:none}
+  .stream[data-state="paused"] .stream__cta{opacity:.35;pointer-events:none;border-color:var(--hairline);color:var(--dust)}
+
+  /* ============ WATCHPARTIES ============ */
+  .wp-table{
+    width:100%;border-collapse:collapse;
+    font-variant-numeric:tabular-nums;
+  }
+  .wp-table thead th{
+    text-align:left;
+    font-family:var(--mono);font-size:10px;letter-spacing:.18em;
+    color:var(--dust);text-transform:uppercase;font-weight:500;
+    padding:12px 8px;border-bottom:1px solid var(--hairline);
+  }
+  .wp-table thead th.right{text-align:right}
+  .wp-table tbody tr{transition:background 120ms}
+  .wp-table tbody tr:hover{background:rgba(244,239,230,.018)}
+  .wp-table td{
+    padding:14px 8px;
+    border-bottom:1px solid var(--hairline);
+    vertical-align:middle;
+  }
+
+  .wp-row .rank{
+    font-family:var(--mono);font-size:12px;color:var(--dust);
+    width:42px;letter-spacing:.04em;
+  }
+  .wp-row .platform{
+    font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+    color:var(--bone);
+    border:1px solid var(--hairline);padding:3px 6px;text-transform:uppercase;
+    display:inline-block;width:32px;text-align:center;font-weight:500;
+  }
+  .wp-row .name-cell{padding-left:14px}
+  .wp-row .name{font-weight:500;font-size:15px;color:var(--bone)}
+  .wp-row .viewers{
+    font-family:var(--display);font-weight:700;
+    font-size:22px;letter-spacing:-.01em;
+    text-align:right;min-width:96px;
+    white-space:nowrap;
+  }
+  .wp-row .viewers .live-tick{
+    display:inline-block;width:6px;height:6px;border-radius:50%;
+    background:var(--embers);margin-left:8px;
+    animation:pulse60 1s infinite cubic-bezier(.4,0,.6,1);
+    transform:translateY(-3px);
+  }
+  .wp-row .arrow{
+    font-family:var(--mono);color:var(--dust);
+    text-align:right;width:24px;transition:color 120ms,transform 160ms;
+  }
+  .wp-table tbody tr:hover .arrow{color:var(--bone);transform:translateX(2px)}
+
+  .wp-row[data-state="offline"] .name{color:var(--dust)}
+  .wp-row[data-state="offline"] .platform{color:var(--dust);border-color:var(--hairline);opacity:.55}
+  .wp-row[data-state="offline"] .viewers{
+    font-family:var(--mono);font-weight:500;font-size:11px;
+    letter-spacing:.18em;color:var(--dust);text-transform:uppercase;
+  }
+  .wp-row[data-state="offline"] .rank{opacity:.5}
+
+  .wp-empty{
+    padding:36px 8px;text-align:center;
+    font-family:var(--mono);font-size:11px;letter-spacing:.18em;
+    color:var(--dust);text-transform:uppercase;
+    border-bottom:1px solid var(--hairline);
+  }
+  .wp-show-all{
+    display:block;width:100%;
+    padding:18px 8px;
+    background:transparent;border:none;
+    border-bottom:1px solid var(--hairline);
+    color:var(--dust);
+    font-family:var(--mono);font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;cursor:pointer;
+    transition:color 120ms;
+  }
+  .wp-show-all:hover{color:var(--bone)}
+
+  /* mobile: hide rank header label only, keep cells */
+  @media (max-width:480px){
+    .wp-row .name{font-size:14px}
+    .wp-row .viewers{font-size:19px;min-width:80px}
+    .wp-row .name-cell{padding-left:10px}
+    .wp-row .arrow{display:none}
+    .wp-table thead th:last-child{display:none}
+    .wp-row td:last-child{display:none}
+  }
+
+  /* ============ SUBMIT ============ */
+  .submit-block .lede{
+    color:var(--dust);font-size:14px;
+    margin:-8px 0 22px;max-width:520px;
+  }
+  .submit-form{
+    display:grid;grid-template-columns:1fr auto;
+    border:1px solid var(--hairline);
+    max-width:560px;
+  }
+  .submit-form input{
+    background:var(--night-2);border:none;
+    padding:16px 18px;
+    font-family:var(--mono);font-size:13px;
+    color:var(--bone);letter-spacing:.02em;
+    min-width:0;
+  }
+  .submit-form input::placeholder{color:var(--dust)}
+  .submit-form input:focus{outline:none;background:var(--night-3)}
+  .submit-form button{
+    background:var(--embers);color:var(--night);
+    border:none;padding:0 22px;
+    font-family:var(--display);font-weight:900;
+    font-size:22px;letter-spacing:.04em;
+    cursor:pointer;transition:background 120ms;
+    min-width:60px;
+  }
+  .submit-form button:hover{background:#ff7440}
+  .submit-form button:active{background:#e84a12}
+  .submit-note{
+    font-family:var(--mono);font-size:10px;letter-spacing:.16em;
+    color:var(--dust);text-transform:uppercase;
+    margin-top:14px;
+  }
+
+  /* ============ FOOTER ============ */
+  footer.foot{
+    max-width:1100px;margin:0 auto;
+    padding:32px 20px 64px;
+    border-top:1px solid var(--hairline);
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px;
+    font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+    color:var(--dust);text-transform:uppercase;
+  }
+  @media (min-width:720px){footer.foot{padding:32px 32px 72px}}
+  footer.foot a{transition:color 120ms}
+  footer.foot a:hover{color:var(--bone)}
+
+  /* ============ DEMO PANEL ============ */
+  .demo{
+    position:fixed;bottom:14px;right:14px;z-index:60;
+    background:var(--night-2);border:1px solid var(--hairline);
+    padding:11px 13px 12px;
+    font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+    color:var(--dust);
+    display:flex;flex-direction:column;gap:7px;
+    min-width:200px;max-width:240px;
+    box-shadow:0 4px 24px rgba(0,0,0,.4);
+  }
+  .demo__title{
+    text-transform:uppercase;color:var(--embers);
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:3px;font-weight:500;
+  }
+  .demo__title button{
+    background:transparent;border:none;color:var(--dust);
+    font:inherit;font-size:14px;cursor:pointer;padding:0 0 0 8px;line-height:1;
+  }
+  .demo__title button:hover{color:var(--bone)}
+  .demo__body{display:flex;flex-direction:column;gap:7px}
+  .demo label{
+    display:flex;align-items:center;gap:9px;cursor:pointer;
+    text-transform:uppercase;color:var(--bone);user-select:none;
+  }
+  .demo input[type="checkbox"]{
+    appearance:none;-webkit-appearance:none;
+    width:14px;height:14px;
+    background:var(--night);border:1px solid var(--hairline);
+    cursor:pointer;position:relative;flex-shrink:0;
+  }
+  .demo input[type="checkbox"]:checked{
+    background:var(--embers);border-color:var(--embers);
+  }
+  .demo input[type="checkbox"]:checked::after{
+    content:"";position:absolute;left:3px;top:0px;
+    width:5px;height:9px;
+    border:solid var(--night);border-width:0 1.5px 1.5px 0;
+    transform:rotate(45deg);
+  }
+  .demo.collapsed .demo__body{display:none}
+  .demo.collapsed{min-width:0;padding:9px 12px}
+  .demo.collapsed .demo__title{margin-bottom:0}
+
+  @media (max-width:540px){
+    .demo{right:10px;bottom:10px;left:auto;min-width:0;max-width:calc(100vw - 20px)}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar" id="topbar" role="banner">
+  <div class="topbar__inner">
+    <span class="live-badge"><span class="live-dot" aria-hidden="true"></span><span class="live-label">Live</span></span>
+    <span class="topbar__title">ARDA<em>·</em>600KM<em class="hide-sm">·</em><span class="hide-sm">Tag 02</span></span>
+    <span class="topbar__clock"><span class="hide-sm">Verbleibend </span><strong id="clock">38:42:11</strong></span>
+  </div>
+</header>
+
+<main>
+  <!-- HERO -->
+  <section class="hero container">
+    <div class="hero__label">Total Viewer · Alle Streams</div>
+
+    <div class="counter" id="counter" aria-live="polite" aria-atomic="true" aria-label="127483"></div>
+
+    <div class="hero__meta">
+      <div class="hero__delta">
+        <span><span class="arrow">▲</span> <span id="delta-val">+1.204</span> <span class="muted">/ 60s</span></span>
+        <span class="pip">·</span>
+        <span><span class="muted">Peak </span><span id="peak-val">134.902</span></span>
+        <span class="pip">·</span>
+        <span class="muted">Update <span id="update-clock">02:14:33</span></span>
+      </div>
+      <span class="stale-banner">Stale · Last update <span id="stale-since">02:14:33</span></span>
+      <svg class="sparkline" viewBox="0 0 160 32" preserveAspectRatio="none" aria-hidden="true">
+        <path id="spark-path" class="spark-tail" d=""></path>
+        <circle id="spark-head" class="spark-head" cx="160" cy="16" r="2"></circle>
+      </svg>
+    </div>
+  </section>
+
+  <!-- MAIN STREAMS -->
+  <section class="block">
+    <div class="container">
+      <div class="section-head">
+        <h2>Main Streams</h2>
+        <div class="meta"><span class="meta-tick"></span>Arda · Twitch + YouTube</div>
+      </div>
+
+      <div class="streams">
+        <article class="stream" data-platform="twitch" id="stream-tw">
+          <div class="stream__thumb" id="tw-thumb">
+            <span class="stream__platform">Twitch</span>
+            <span class="stream__live-bug">Live</span>
+          </div>
+          <div class="stream__info">
+            <div class="stream__viewers">
+              <small>Viewer</small>
+              <span class="num-row"><span class="num" id="tw-viewers">—</span><span class="live-tick" aria-hidden="true"></span></span>
+            </div>
+            <a class="stream__cta" href="https://www.twitch.tv/ardasaatci1" target="_blank" rel="noopener" aria-label="Twitch-Stream öffnen">Jetzt schauen <span class="arr">→</span></a>
+          </div>
+        </article>
+
+        <article class="stream" data-platform="youtube" id="stream-yt">
+          <div class="stream__thumb" id="yt-thumb">
+            <span class="stream__platform">YouTube</span>
+            <span class="stream__live-bug">Live</span>
+          </div>
+          <div class="stream__info">
+            <div class="stream__viewers">
+              <small>Viewer</small>
+              <span class="num-row"><span class="num" id="yt-viewers">—</span><span class="live-tick" aria-hidden="true"></span></span>
+            </div>
+            <a class="stream__cta" href="https://www.youtube.com/watch?v=l0X5R1hRw8g" target="_blank" rel="noopener" aria-label="YouTube-Stream öffnen">Jetzt schauen <span class="arr">→</span></a>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- WATCHPARTIES -->
+  <section class="block">
+    <div class="container">
+      <div class="section-head">
+        <h2>Watchparties</h2>
+        <div class="meta"><span class="meta-tick"></span><span id="wp-count">10</span> Live · <span id="wp-total">22.391</span> Viewer</div>
+      </div>
+
+      <table class="wp-table" aria-label="Watchparty-Streams nach Viewerzahl">
+        <thead>
+          <tr>
+            <th style="width:42px">Rang</th>
+            <th colspan="2">Streamer</th>
+            <th class="right">Viewer</th>
+            <th aria-hidden="true"></th>
+          </tr>
+        </thead>
+        <tbody id="wp-body"></tbody>
+      </table>
+      <div id="wp-empty" class="wp-empty">Noch keine Watchparties · Reich deinen Stream unten ein</div>
+      <button class="wp-show-all" type="button" id="wp-show-all" hidden>▾  Alle zeigen</button>
+    </div>
+  </section>
+
+  <!-- SUBMIT -->
+  <section class="block submit-block">
+    <div class="container">
+      <div class="section-head">
+        <h2>Watchparty einreichen</h2>
+      </div>
+      <p class="lede">Du streamst grad selbst eine Watchparty? Stream-URL rein — wir checken kurz manuell, dann ist deine Zahl im Total.</p>
+      <form class="submit-form" id="submit-form" autocomplete="off">
+        <input type="url" placeholder="https://twitch.tv/dein-channel" required spellcheck="false" aria-label="Stream-URL">
+        <button type="submit" aria-label="Einreichen">→</button>
+      </form>
+      <div class="submit-note">Manuelle Prüfung · meist &lt; 5 Min</div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>Arda · 600km · 96h · May 2026</span>
+  </footer>
+</main>
+
+<aside class="demo" id="demo" aria-label="Demo-States">
+  <div class="demo__title">
+    <span>Demo · States</span>
+    <button id="demo-toggle" aria-label="ein-/ausklappen">−</button>
+  </div>
+  <div class="demo__body">
+    <label><input type="checkbox" id="t-stale"> <span>Counter stale</span></label>
+    <label><input type="checkbox" id="t-paused"> <span>Stream-Pause</span></label>
+    <label><input type="checkbox" id="t-wp-offline"> <span>Watchparty offline</span></label>
+  </div>
+</aside>
+
+<script>
+(() => {
+  // ---------- Helpers ----------
+  const $ = (sel, ctx=document) => ctx.querySelector(sel);
+  const $$ = (sel, ctx=document) => Array.from(ctx.querySelectorAll(sel));
+  const fmtDe = n => Math.abs(n).toLocaleString('de-DE');
+  const sign = n => (n >= 0 ? '+' : '−') + fmtDe(n);
+  const pad2 = n => String(n).padStart(2, '0');
+  const fmtClock = (sec) => {
+    sec = Math.max(0, sec|0);
+    return `${pad2(Math.floor(sec/3600))}:${pad2(Math.floor(sec/60)%60)}:${pad2(sec%60)}`;
+  };
+
+  // ---------- Counter (per-digit flip) ----------
+  const COUNTER_DIGITS = 6;
+  const counterEl = $('#counter');
+  function buildCounter(){
+    const html = [];
+    for (let i = 0; i < COUNTER_DIGITS; i++){
+      if (i === COUNTER_DIGITS - 3) html.push('<span class="sep">.</span>');
+      const cells = Array.from({length:10}, (_,n) => `<span class="digit__cell">${n}</span>`).join('');
+      html.push(`<span class="digit" data-pos="${i}"><span class="digit__strip">${cells}</span></span>`);
+    }
+    counterEl.innerHTML = html.join('');
+  }
+  buildCounter();
+
+  let prevDigits = null;
+  function setCounter(value){
+    const padded = String(Math.max(0, value|0)).padStart(COUNTER_DIGITS, '0').slice(-COUNTER_DIGITS);
+    const digits = padded.split('').map(d => parseInt(d,10));
+    const cells = $$('.digit', counterEl);
+    digits.forEach((d, i) => {
+      const cell = cells[i];
+      const strip = $('.digit__strip', cell);
+      strip.style.transform = `translateY(-${d}em)`;
+      if (prevDigits && prevDigits[i] !== d){
+        cell.classList.remove('flash');
+        void cell.offsetWidth;
+        cell.classList.add('flash');
+      }
+    });
+    prevDigits = digits;
+    counterEl.setAttribute('aria-label', String(value));
+  }
+
+  // ---------- Sparkline ----------
+  const sparkPath = $('#spark-path');
+  const sparkHead = $('#spark-head');
+  const SPARK_LEN = 30;
+  const sparkBuffer = [];
+
+  function tickSpark(val){
+    sparkBuffer.push(val);
+    if (sparkBuffer.length > SPARK_LEN) sparkBuffer.shift();
+    if (sparkBuffer.length < 2) return;
+    const min = Math.min(...sparkBuffer);
+    const max = Math.max(...sparkBuffer);
+    const range = Math.max(1, max - min);
+    const W = 160, H = 32, padTop = 4, padBot = 6;
+    const pts = sparkBuffer.map((v,i) => {
+      const x = (i / (SPARK_LEN - 1)) * W;
+      const y = H - padBot - ((v - min) / range) * (H - padTop - padBot);
+      return [x, y];
+    });
+    let d = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+    for (let i = 1; i < pts.length; i++) d += ` L ${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)}`;
+    sparkPath.setAttribute('d', d);
+    const last = pts[pts.length - 1];
+    sparkHead.setAttribute('cx', last[0].toFixed(1));
+    sparkHead.setAttribute('cy', last[1].toFixed(1));
+  }
+
+  // ---------- Live config ----------
+  const CONFIG = {
+    twitchChannel: 'ardasaatci1',
+    youtubeVideoId: 'l0X5R1hRw8g',
+    // YouTube Data API v3 Key — per HTTP-Referrer auf eure Domain restricten!
+    // Ohne Key bleibt die YT-Viewer-Zahl auf "—".
+    youtubeApiKey: 'AIzaSyAnFpyxUZ8IbZXH5eWNAaL1KGiBaed1pFk',
+    // Pollintervall für Live-Zahlen (ms). Twitch via decapi.me ist tolerant,
+    // YouTube API hat 10k Units/Tag — bei 15s Intervall ~5760 Aufrufe/Tag.
+    pollMs: 15000,
+  };
+
+  // ---------- Live state ----------
+  let total = 0;
+  let peak = 0;
+  const totalHistory = []; // {t, v}
+  let twViewers = 0;
+  let ytViewers = 0;
+  let twOnline = false;
+  let ytOnline = false;
+
+  // ---------- Stream Embeds ----------
+  function mountEmbeds(){
+    const parent = window.location.hostname || 'localhost';
+    const twThumb = $('#tw-thumb');
+    const ytThumb = $('#yt-thumb');
+
+    // Twitch braucht parent-Param mit Hostname (nicht über file://!)
+    if (window.location.protocol !== 'file:'){
+      const twIframe = document.createElement('iframe');
+      twIframe.src = `https://player.twitch.tv/?channel=${encodeURIComponent(CONFIG.twitchChannel)}&parent=${encodeURIComponent(parent)}&muted=true`;
+      twIframe.allowFullscreen = true;
+      twIframe.title = 'Twitch Stream';
+      twThumb.appendChild(twIframe);
+      twThumb.classList.add('has-embed');
+    }
+
+    // YouTube Live Embed
+    const ytIframe = document.createElement('iframe');
+    ytIframe.src = `https://www.youtube.com/embed/${encodeURIComponent(CONFIG.youtubeVideoId)}?autoplay=0&mute=1`;
+    ytIframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+    ytIframe.allowFullscreen = true;
+    ytIframe.title = 'YouTube Live';
+    ytThumb.appendChild(ytIframe);
+    ytThumb.classList.add('has-embed');
+  }
+  mountEmbeds();
+
+  // ---------- Live fetchers ----------
+  async function fetchTwitchViewers(){
+    try {
+      const res = await fetch(`https://decapi.me/twitch/viewercount/${encodeURIComponent(CONFIG.twitchChannel)}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('decapi response ' + res.status);
+      const text = (await res.text()).trim();
+      // Offline-Antwort: "ardasaatci1 is offline"
+      if (/offline/i.test(text) || /not.*found/i.test(text) || /error/i.test(text)){
+        twOnline = false;
+        return null;
+      }
+      const n = parseInt(text.replace(/[^\d]/g, ''), 10);
+      if (!Number.isFinite(n)) { twOnline = false; return null; }
+      twOnline = true;
+      return n;
+    } catch (err){
+      console.warn('[twitch] fetch failed', err);
+      return null;
+    }
+  }
+
+  async function fetchYoutubeViewers(){
+    if (!CONFIG.youtubeApiKey){
+      ytOnline = false;
+      return null;
+    }
+    try {
+      const url = `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${encodeURIComponent(CONFIG.youtubeVideoId)}&key=${encodeURIComponent(CONFIG.youtubeApiKey)}`;
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('youtube api ' + res.status);
+      const data = await res.json();
+      const item = data.items && data.items[0];
+      const cv = item && item.liveStreamingDetails && item.liveStreamingDetails.concurrentViewers;
+      if (cv == null){ ytOnline = false; return null; }
+      ytOnline = true;
+      return parseInt(cv, 10);
+    } catch (err){
+      console.warn('[youtube] fetch failed', err);
+      return null;
+    }
+  }
+
+  function watchpartySum(){
+    return watchparties.filter(w => !w.offline).reduce((s,w) => s + w.viewers, 0);
+  }
+
+  async function pollLive(){
+    const [twN, ytN] = await Promise.all([fetchTwitchViewers(), fetchYoutubeViewers()]);
+    if (twN != null) twViewers = twN;
+    if (ytN != null) ytViewers = ytN;
+
+    // Stream-States: offline → "Offline" und data-state="paused"
+    const twEl = $('#stream-tw');
+    const ytEl = $('#stream-yt');
+    twEl.dataset.state = twOnline ? '' : 'paused';
+    ytEl.dataset.state = ytOnline ? '' : 'paused';
+    $('#tw-viewers').textContent = twOnline ? fmtDe(twViewers) : '—';
+    $('#yt-viewers').textContent = ytOnline ? fmtDe(ytViewers) : '—';
+
+    // Total = Live-Sum aller Streams + Watchparties
+    // Total = nur echte Stream-Zahlen. Watchparty-Tabelle ist UI-Mock und zählt nicht mit.
+    total = (twOnline ? twViewers : 0) + (ytOnline ? ytViewers : 0);
+    if (total > peak){ peak = total; $('#peak-val').textContent = fmtDe(peak); }
+    setCounter(total);
+    tickSpark(total);
+    totalHistory.push({t: Date.now(), v: total});
+    while (totalHistory.length && Date.now() - totalHistory[0].t > 65000) totalHistory.shift();
+    const sixtyAgo = totalHistory.find(e => Date.now() - e.t >= 60000) || totalHistory[0];
+    const d60 = total - sixtyAgo.v;
+    $('#delta-val').textContent = sign(d60);
+  }
+
+  // ---------- Watchparties ----------
+  // Echte Watchparties — Liste aktuell leer.
+  // Format: {platform:'tw'|'yt', name:'channelname', viewers:0, offline:false}
+  const watchparties = [];
+
+  function renderWP(){
+    const tbody = $('#wp-body');
+    const sorted = watchparties.slice().sort((a,b) => {
+      // offline rows keep their last known position relative to others; sort live by viewers desc, offline by last viewers desc
+      if (a.offline && !b.offline) return 1;
+      if (!a.offline && b.offline) return -1;
+      return b.viewers - a.viewers;
+    });
+    tbody.innerHTML = sorted.map((wp, i) => `
+      <tr class="wp-row" data-state="${wp.offline ? 'offline' : 'live'}">
+        <td class="rank">${pad2(i+1)}</td>
+        <td><span class="platform">${wp.platform}</span></td>
+        <td class="name-cell"><span class="name">${wp.name}</span></td>
+        <td class="viewers">${wp.offline
+          ? 'Offline'
+          : `<span class="num">${fmtDe(wp.viewers)}</span><span class="live-tick" aria-hidden="true"></span>`
+        }</td>
+        <td class="arrow" aria-hidden="true">→</td>
+      </tr>
+    `).join('');
+
+    const live = watchparties.filter(w => !w.offline);
+    $('#wp-count').textContent = live.length;
+    $('#wp-total').textContent = fmtDe(live.reduce((s,w) => s + w.viewers, 0));
+
+    const empty = $('#wp-empty');
+    const showAll = $('#wp-show-all');
+    if (empty) empty.style.display = watchparties.length === 0 ? 'block' : 'none';
+    if (showAll) showAll.hidden = watchparties.length <= 10;
+  }
+  renderWP();
+
+  function tickWP(){
+    for (const wp of watchparties){
+      if (wp.offline) continue;
+      // gentle wobble; bigger for bigger streams
+      const scale = Math.max(20, wp.viewers * 0.012);
+      const change = Math.round((Math.random() - .48) * scale * 2);
+      wp.viewers = Math.max(50, wp.viewers + change);
+    }
+    renderWP();
+  }
+
+  // ---------- Clock ----------
+  const eventEnd = Date.now() + (38*3600 + 42*60 + 11) * 1000;
+  const startClock = Date.now() - (2*3600 + 14*60 + 33) * 1000; // "Update 02:14:33"
+  function tickClock(){
+    const remaining = Math.max(0, Math.floor((eventEnd - Date.now()) / 1000));
+    $('#clock').textContent = fmtClock(remaining);
+    const elapsed = Math.floor((Date.now() - startClock) / 1000);
+    $('#update-clock').textContent = fmtClock(elapsed);
+  }
+
+  // ---------- Master tick ----------
+  let staleSince = null;
+
+  // Sekündlich nur Clock; Live-Viewer kommen aus pollLive(); Watchparties wobbeln alle 4s.
+  let wpTickN = 0;
+  setInterval(() => {
+    tickClock();
+    if (++wpTickN % 4 === 0){
+      tickWP();
+      // Total nach WP-Wobble nachziehen, ohne neuen API-Call
+      // Total = nur echte Stream-Zahlen. Watchparty-Tabelle ist UI-Mock und zählt nicht mit.
+    total = (twOnline ? twViewers : 0) + (ytOnline ? ytViewers : 0);
+      if (total > peak){ peak = total; $('#peak-val').textContent = fmtDe(peak); }
+      setCounter(total);
+    }
+  }, 1000);
+
+  // initial paint + Live-Polling starten
+  setCounter(0);
+  tickClock();
+  pollLive();
+  setInterval(pollLive, CONFIG.pollMs);
+
+  // ---------- Demo toggles ----------
+  $('#t-stale').addEventListener('change', e => {
+    document.body.classList.toggle('stale', e.target.checked);
+    if (e.target.checked){
+      staleSince = $('#update-clock').textContent;
+      $('#stale-since').textContent = staleSince;
+    }
+  });
+
+  $('#t-paused').addEventListener('change', e => {
+    const state = e.target.checked ? 'paused' : '';
+    $('#stream-tw').dataset.state = state;
+    $('#stream-yt').dataset.state = state;
+    if (e.target.checked){
+      $('#tw-viewers').textContent = '—';
+      $('#yt-viewers').textContent = '—';
+    } else {
+      $('#tw-viewers').textContent = fmtDe(twViewers);
+      $('#yt-viewers').textContent = fmtDe(ytViewers);
+    }
+  });
+
+  $('#t-wp-offline').addEventListener('change', e => {
+    // mark a mid-rank watchparty offline so it visibly demotes
+    const target = watchparties.find(w => w.name === 'coffeehouse');
+    if (target) target.offline = e.target.checked;
+    renderWP();
+  });
+
+  // demo collapse
+  $('#demo-toggle').addEventListener('click', () => {
+    const demo = $('#demo');
+    const collapsed = demo.classList.toggle('collapsed');
+    $('#demo-toggle').textContent = collapsed ? '+' : '−';
+  });
+
+  // submit form
+  $('#submit-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button');
+    const old = btn.textContent;
+    btn.textContent = '✓';
+    setTimeout(() => { btn.textContent = old; e.target.reset(); }, 1400);
+  });
+
+  // wp show all (just toggles label, no actual data fetch in mockup)
+  $('.wp-show-all').addEventListener('click', e => {
+    e.currentTarget.textContent = '— Top 10 anzeigen';
+  });
+})();
+</script>
+</body>
+</html>

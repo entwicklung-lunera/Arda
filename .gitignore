@@ -1,0 +1,25 @@
+# Secrets
+.env
+.env.*
+!.env.example
+.mcp.json
+
+# Supabase
+.supabase/
+supabase/.temp/
+supabase/.branches/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
