@@ -450,7 +450,7 @@
 <header class="topbar" id="topbar" role="banner">
   <div class="topbar__inner">
     <span class="live-badge"><span class="live-dot" aria-hidden="true"></span><span class="live-label">Live</span></span>
-    <span class="topbar__title">ARDA<em>·</em>600KM<em class="hide-sm">·</em><span class="hide-sm">Tag 02</span></span>
+    <span class="topbar__title">ARDA<em>·</em>600KM<em class="hide-sm">·</em><span class="hide-sm" id="topbar-day">Tag 02</span></span>
     <span class="topbar__clock"><span class="hide-sm">Verbleibend </span><strong id="clock">38:42:11</strong></span>
   </div>
 </header>
@@ -650,6 +650,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.46.1';
     // Supabase — Watchparties + Submit
     supabaseUrl: 'https://rnxzmwlddwmdpotvfnvw.supabase.co',
     supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJueHptd2xkZHdtZHBvdHZmbnZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNTAyMDQsImV4cCI6MjA5MzgyNjIwNH0.8Q-MwPHzxN2Xh4fgNlc8BlzE1I0Xmgx3e21OBkXkmbE',
+    // Event-Zeiten — sync mit cyborgseason.com (96h Stream).
+    // Bei Drift: einfach die ISO-Strings anpassen.
+    eventStartIso: '2026-05-05T18:09:55Z',
+    eventEndIso:   '2026-05-09T18:09:55Z',
   };
 
   const supa = createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey, {
@@ -833,13 +837,19 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.46.1';
   loadWatchparties();
 
   // ---------- Clock ----------
-  const eventEnd = Date.now() + (38*3600 + 42*60 + 11) * 1000;
-  const startClock = Date.now() - (2*3600 + 14*60 + 33) * 1000; // "Update 02:14:33"
+  const eventEnd   = new Date(CONFIG.eventEndIso).getTime();
+  const startClock = new Date(CONFIG.eventStartIso).getTime();
+  const dayLabelEl = $('#topbar-day');
+
   function tickClock(){
     const remaining = Math.max(0, Math.floor((eventEnd - Date.now()) / 1000));
     $('#clock').textContent = fmtClock(remaining);
-    const elapsed = Math.floor((Date.now() - startClock) / 1000);
+    const elapsed = Math.max(0, Math.floor((Date.now() - startClock) / 1000));
     $('#update-clock').textContent = fmtClock(elapsed);
+    if (dayLabelEl){
+      const day = Math.min(4, Math.floor(elapsed / 86400) + 1);
+      dayLabelEl.textContent = `Tag ${pad2(day)}`;
+    }
   }
 
   // ---------- Master tick ----------
