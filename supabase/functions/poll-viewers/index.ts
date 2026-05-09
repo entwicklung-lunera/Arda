@@ -194,42 +194,45 @@ Deno.serve(async (_req) => {
     )
   );
 
-  // Peak-Tracking: einzelne Plattform-Peaks + Total
+  // Peak-Tracking
+  // - main_twitch_peak / main_youtube_peak: max der Live-Werte über Zeit
+  // - main_total_peak: SUMME der beiden Plattform-Peaks (nicht live snapshot)
   const liveOf = (u?: Update) => (u && u.status === 'live' ? (u.last_viewers ?? 0) : 0);
   const mainTwLive = liveOf(mainTwResult[0]);
   const mainYtLive = liveOf(mainYtResult[0]);
   const wpLiveSum = updates.reduce((s, u) => s + liveOf(u), 0);
-  const currentTotal = mainTwLive + mainYtLive + wpLiveSum;
+  const currentTotalLive = mainTwLive + mainYtLive + wpLiveSum;
 
-  // Zu trackende Peak-Keys + ihre Live-Werte
-  const peakChecks: Array<{ key: string; current: number }> = [
-    { key: 'main_twitch_peak', current: mainTwLive },
-    { key: 'main_youtube_peak', current: mainYtLive },
-    { key: 'main_total_peak', current: currentTotal },
-  ];
-
-  // Stored-Werte in einem Sweep holen
   const { data: storedRows } = await supa
     .from('event_stats')
     .select('key, value_int')
-    .in('key', peakChecks.map((p) => p.key));
+    .in('key', ['main_twitch_peak', 'main_youtube_peak', 'main_total_peak']);
   const stored = new Map<string, number>();
   for (const r of storedRows ?? []) stored.set(r.key, Number(r.value_int ?? 0));
 
-  // Nur erhöhen — Upserts parallel
+  const oldTwPeak = stored.get('main_twitch_peak') ?? 0;
+  const oldYtPeak = stored.get('main_youtube_peak') ?? 0;
+  const oldTotalPeak = stored.get('main_total_peak') ?? 0;
+
+  const newTwPeak = Math.max(oldTwPeak, mainTwLive);
+  const newYtPeak = Math.max(oldYtPeak, mainYtLive);
+  const newTotalPeak = newTwPeak + newYtPeak;
+
+  const writes: Promise<unknown>[] = [];
   const peakUpdates: string[] = [];
-  await Promise.all(
-    peakChecks.map(async ({ key, current }) => {
-      if (current <= 0) return;
-      const storedVal = stored.get(key) ?? 0;
-      if (current > storedVal) {
-        await supa
-          .from('event_stats')
-          .upsert({ key, value_int: current, updated_at: now });
-        peakUpdates.push(key);
-      }
-    })
-  );
+  if (newTwPeak > oldTwPeak) {
+    writes.push(supa.from('event_stats').upsert({ key: 'main_twitch_peak', value_int: newTwPeak, updated_at: now }));
+    peakUpdates.push('main_twitch_peak');
+  }
+  if (newYtPeak > oldYtPeak) {
+    writes.push(supa.from('event_stats').upsert({ key: 'main_youtube_peak', value_int: newYtPeak, updated_at: now }));
+    peakUpdates.push('main_youtube_peak');
+  }
+  if (newTotalPeak !== oldTotalPeak) {
+    writes.push(supa.from('event_stats').upsert({ key: 'main_total_peak', value_int: newTotalPeak, updated_at: now }));
+    peakUpdates.push('main_total_peak');
+  }
+  await Promise.all(writes);
 
   return new Response(
     JSON.stringify({
@@ -237,7 +240,8 @@ Deno.serve(async (_req) => {
       polled: updates.length,
       twitch: twRows.length,
       youtube: ytRows.length,
-      main: { twitch: mainTwLive, youtube: mainYtLive, wp_sum: wpLiveSum, total: currentTotal },
+      main: { twitch: mainTwLive, youtube: mainYtLive, wp_sum: wpLiveSum, total_live: currentTotalLive },
+      peaks: { twitch: newTwPeak, youtube: newYtPeak, total: newTotalPeak },
       peaks_updated: peakUpdates,
     }),
     { headers: { 'Content-Type': 'application/json' } }
