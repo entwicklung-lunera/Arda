@@ -24,9 +24,15 @@ begin
   end if;
 end $$;
 
--- Initial: Twitch-Peak (135.672) aus TwitchTracker als Mindestwert.
--- Cron überschreibt nur, wenn aktueller Total > stored.
-insert into public.event_stats (key, value_int) values ('main_total_peak', 135672)
-  on conflict (key) do update
-    set value_int = greatest(coalesce(public.event_stats.value_int, 0), excluded.value_int),
-        updated_at = now();
+-- Initial-Peaks aus historischen Werten (TwitchTracker / Stream-Statistik):
+-- - Twitch all-time-high: 135.672
+-- - YouTube all-time-high: 175.365
+-- - Total: max der beiden (Peaks waren nicht gleichzeitig).
+-- Cron überschreibt jeden Wert nur, wenn live > stored.
+insert into public.event_stats (key, value_int) values
+  ('main_twitch_peak',  135672),
+  ('main_youtube_peak', 175365),
+  ('main_total_peak',   175365)
+on conflict (key) do update
+  set value_int = greatest(coalesce(public.event_stats.value_int, 0), excluded.value_int),
+      updated_at = now();

@@ -194,28 +194,42 @@ Deno.serve(async (_req) => {
     )
   );
 
-  // Total-Peak: Hauptkanäle + alle live Watchparties
+  // Peak-Tracking: einzelne Plattform-Peaks + Total
   const liveOf = (u?: Update) => (u && u.status === 'live' ? (u.last_viewers ?? 0) : 0);
   const mainTwLive = liveOf(mainTwResult[0]);
   const mainYtLive = liveOf(mainYtResult[0]);
   const wpLiveSum = updates.reduce((s, u) => s + liveOf(u), 0);
   const currentTotal = mainTwLive + mainYtLive + wpLiveSum;
 
-  let peakUpdated = false;
-  if (currentTotal > 0) {
-    const { data: cur } = await supa
-      .from('event_stats')
-      .select('value_int')
-      .eq('key', 'main_total_peak')
-      .maybeSingle();
-    const storedPeak = Number(cur?.value_int ?? 0);
-    if (currentTotal > storedPeak) {
-      await supa
-        .from('event_stats')
-        .upsert({ key: 'main_total_peak', value_int: currentTotal, updated_at: now });
-      peakUpdated = true;
-    }
-  }
+  // Zu trackende Peak-Keys + ihre Live-Werte
+  const peakChecks: Array<{ key: string; current: number }> = [
+    { key: 'main_twitch_peak', current: mainTwLive },
+    { key: 'main_youtube_peak', current: mainYtLive },
+    { key: 'main_total_peak', current: currentTotal },
+  ];
+
+  // Stored-Werte in einem Sweep holen
+  const { data: storedRows } = await supa
+    .from('event_stats')
+    .select('key, value_int')
+    .in('key', peakChecks.map((p) => p.key));
+  const stored = new Map<string, number>();
+  for (const r of storedRows ?? []) stored.set(r.key, Number(r.value_int ?? 0));
+
+  // Nur erhöhen — Upserts parallel
+  const peakUpdates: string[] = [];
+  await Promise.all(
+    peakChecks.map(async ({ key, current }) => {
+      if (current <= 0) return;
+      const storedVal = stored.get(key) ?? 0;
+      if (current > storedVal) {
+        await supa
+          .from('event_stats')
+          .upsert({ key, value_int: current, updated_at: now });
+        peakUpdates.push(key);
+      }
+    })
+  );
 
   return new Response(
     JSON.stringify({
@@ -224,7 +238,7 @@ Deno.serve(async (_req) => {
       twitch: twRows.length,
       youtube: ytRows.length,
       main: { twitch: mainTwLive, youtube: mainYtLive, wp_sum: wpLiveSum, total: currentTotal },
-      peak_updated: peakUpdated,
+      peaks_updated: peakUpdates,
     }),
     { headers: { 'Content-Type': 'application/json' } }
   );
